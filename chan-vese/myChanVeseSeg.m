@@ -99,32 +99,4 @@ for iter = 1 : numiter
     end
     % Renew c1 and c2
     [c1,c2] = myCalcAverage(phi,img);
-end
-
-
-           
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-        
+end    
