@@ -154,14 +154,18 @@ def reg_recover(regpath, rate, unit='kpc'):
         # Input to regchg
         f_chg.write("%f %f %f\n" % (maj_axis, min_axis, dist))
 
-def gen_sample(img, boxsize=10,px_over=5):
+def gen_sample(img, img_mark, rate=0.5, boxsize=10,px_over=5):
     """
     Generate samples by splitting the pixel classified image with provided     boxsize
 
     Input
     -----
     img: np.ndarray
-        The 2D pixel classified image
+        The 2D raw image
+    img_mark: np.ndarray
+        The 2D marked image
+    rate: float
+        The rate of cavity pixels in the box, belongs to (0,1), default as 0.5
     boxsize: integer
         Size of the box, default as 10
     px_over: integer
@@ -178,8 +182,8 @@ def gen_sample(img, boxsize=10,px_over=5):
     rows,cols = img.shape
     px_diff = boxsize - px_over
     # Number of boxes
-    box_rows = int(np.floor(rows/px_diff))
-    box_cols = int(np.floor(cols/px_diff))
+    box_rows = int(np.floor(rows/px_diff)) - 1
+    box_cols = int(np.floor(cols/px_diff)) - 1
     # init data and label
     data = np.zeros((box_rows*box_cols, boxsize**2))
     label = np.zeros((box_rows*box_cols, 1))
@@ -189,9 +193,16 @@ def gen_sample(img, boxsize=10,px_over=5):
         for j in range(box_cols):
             sample = img[i*px_diff:i*px_diff+boxsize,
                          j*px_diff:j*px_diff+boxsize]
-            hist,bin_edge = np.histogram(sample.reshape((boxsize**2,1)))
-            data[i*box_rows+j,:] = sample.reshape((boxsize**2, 1))
-            label[i*box_rows+j,0] = np.where(hist==hist.max())[0][0]
+            label_mat = img_mark[i*px_diff:i*px_diff+boxsize,
+                                 j*px_diff:j*px_diff+boxsize]
+            data[i*box_rows+j,:] = sample.reshape((boxsize**2, ))
+            rate_box = len(np.where(label_mat.reshape((boxsize**2,)) == 1)[0])
+            # label[i*box_rows+j,0] = np.where(hist==hist.max())[0][0]
+            rate_box = rate_box / boxsize**2
+            if rate_box >= rate:
+                label[i*box_rows+j,0] = 1
+            else:
+                label[i*box_rows+j,0] = 0
 
     return data,label
 
