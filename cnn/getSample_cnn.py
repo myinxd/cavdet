@@ -73,8 +73,8 @@ def main():
             # load mask
             mask = imread(markpath) / np.int32(255)
             # get cav_mat
-            data,label = utils.gen_sample(imgnorm, mask, rate=0.5,
-                                          boxsize=20, px_over=10)
+            data,label = utils.gen_sample(imgnorm, mask, rate=0.4,
+                                          boxsize=10, px_over=5)
             if train_mat is None:
                 train_mat = np.array(data)
                 train_label = np.array(label)
@@ -102,14 +102,14 @@ def main():
             # load mask
             mask = imread(markpath) / np.int32(255)
             # get cav_mat
-            data,label = utils.gen_sample(imgnorm, mask, rate=0.5,
-                                          boxsize=20, px_over=10)
-            if train_mat is None:
+            data,label = utils.gen_sample(imgnorm, mask, rate=0.4,
+                                          boxsize=10, px_over=5)
+            if test_mat is None:
                 test_mat = np.array(data)
                 test_label = np.array(label)
             else:
-                test_mat = np.row_stack((train_mat,data))
-                test_label = np.row_stack((train_label, label))
+                test_mat = np.row_stack((test_mat,data))
+                test_label = np.row_stack((test_label, label))
 
     # save
     train_path = os.path.join(inpath, 'sample_train')
