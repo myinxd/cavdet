@@ -24,6 +24,8 @@ get_reg:
     Get image coordinates of cavities.
 get_mark:
     Mark the pixels with label of cavity and background.
+cav_locate:
+    Locate the cavities according to the classification result.
 """
 
 import astroquery
@@ -34,6 +36,8 @@ import numpy as np
 import os
 from astropy.io import fits
 from scipy.misc import imsave
+from skimage import feature
+import skimage.measure as measure
 
 
 def get_redshift(objname):
@@ -301,3 +305,141 @@ def get_mark(imgpath, cav_mat, savepath=None):
 
     return img_mark
 
+def img_recover(data, label, imgsize=(400, 400), px_over=5):
+    """Revoer the image after classification.
+
+    Inputs
+    ======
+    data: np.ndarray
+        the splitted samples data of the observation
+    label: np.ndarray
+        the estimated labels
+    imgsize: tuple
+        shape of the image
+    px_over: integer
+        the overlapped pixels
+
+    Output
+    ======
+    img: np.ndarray
+        the recovered image
+    """
+    # Init
+    img = np.zeros(imgsize)
+
+    # Get params
+    numsamples, boxsize = data.shape
+    boxsize = int(np.sqrt(boxsize))
+    # Number of boxes
+    px_diff = boxsize - px_over
+    box_rows = int(np.floor(imgsize[0]/px_diff)) - 1
+    box_cols = int(np.floor(imgsize[1]/px_diff)) - 1
+
+    # recover
+    for i in range(box_rows):
+        for j in range(box_cols):
+            img[i*px_diff:i*px_diff+boxsize,
+                j*px_diff:j*px_diff+boxsize] += label[i*box_rows+j]
+
+    return img
+
+def cav_edge(img, sigma):
+    """
+    Detect edges in the recovered image.
+
+    Reference
+    =========
+    [1] Edge detection with canny by python
+        http://blog.csdn.net/matrix_space/article/details/49786427
+
+    Inputs
+    ======
+    img: np.ndarray
+        the recovered image
+    sigma: float
+        the sigma in canny methods
+
+    Output
+    ======
+    img_edge: np.ndarray
+        teh edge detected image
+    """
+    # Reprocess of the image
+    idx = np.where(img >= 1)
+    img_re = img
+    img_re[idx] = 1
+    # Edge detect
+    edge = feature.canny(img_re, sigma=sigma)
+    # bool to integer
+    img_edge = edge.astype('int32')
+
+    return img_edge
+
+def cav_locate(img_edge,obspath=None, cntpath='cnt.reg', regpath='cav_det.reg', rate=0.8):
+    """
+    Locate cavities in the edge detected image
+
+    Reference
+    =========
+    [1] Regionprops in scikit-image
+        http://blog.csdn.net/jkwwwwwwwwww/article/details/54381298
+
+    Inputs
+    ======
+    img_edge: np.ndarray
+        the edge detected image
+    obspath: str
+        path of the observation, default as None
+    cntpath: str
+        path of the center region file, default as 'cnt.reg'
+    regpath: str
+        path to save the result
+    rate: float
+        shrink rate of the regions, default as 0.8
+
+    Output
+    ======
+    cavs: list
+    list of the detected cavities.
+    """
+    # Init
+    cav_reg = []
+    img_edge = np.flipud(img_edge) # Flip updown, differ between image and fits
+
+    # Get connectivity regions
+    props_label = measure.label(img_edge, connectivity=img_edge.ndim)
+    # Get connected region properties
+    props = measure.regionprops(props_label)
+
+    # save elliptical regions
+    for r in props:
+        reg = [r.centroid[1],r.centroid[0],
+               r.major_axis_length/2*rate, r.minor_axis_length/2*rate,
+               r.orientation / np.pi * 180]
+        cav_reg.append(reg)
+
+    # save
+    if not obspath is None:
+        cntpath = os.path.join(obspath, cntpath)
+        regpath = os.path.join(obspath, regpath)
+        # get physical centers
+        rows,cols = img_edge.shape
+        fp_cnt = open(cntpath,'r')
+        cnt_reg = fp_cnt.readline()
+        cnt_reg = cnt_reg[4:-1]
+        cnt_reg = cnt_reg.split(',')
+        cnt_x = float(cnt_reg[0]) - cols/2
+        cnt_y = float(cnt_reg[1]) - rows/2
+        # save
+        if os.path.exists(regpath):
+            os.remove(regpath)
+        fp = open(regpath,'a')
+        for r in cav_reg:
+            r[0] += cnt_x
+            r[1] += cnt_y
+            fp.write("ellipse(%f,%f,%f,%f,%f)\n" % tuple(r))
+
+        fp_cnt.close()
+        fp.close()
+
+    return cav_reg
