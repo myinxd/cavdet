@@ -29,11 +29,11 @@ def main():
     cntpath = os.path.join(obspath, 'cnt.reg')
     cavpath = os.path.join(obspath, 'cav_man.reg')
     markpath = os.path.join(obspath, 'img_mark.png')
-    imgpath = os.path.join(obspath, 'img_cut.fits')
+    imgpath = os.path.join(obspath, 'img_beta.fits')
     # get cav_mat
     cav_mat = utils.get_reg(cntpath, cavpath)
     # get mark_image
-    utils.get_mark(imgpath, cav_mat, savepath=markpath)
+    utils.get_mark_multi(imgpath, cav_mat, savepath=markpath)
 
 '''
 def main():
@@ -62,11 +62,11 @@ def main():
             cntpath = os.path.join(obspath, 'cnt.reg')
             cavpath = os.path.join(obspath, 'cav_man.reg')
             markpath = os.path.join(obspath, 'img_mark.png')
-            imgpath = os.path.join(obspath, 'img_cut.fits')
+            imgpath = os.path.join(obspath, 'beta.fits')
             # get cav_mat
             cav_mat = utils.get_reg(cntpath, cavpath)
             # get mark_image
-            utils.get_mark(imgpath, cav_mat, savepath=markpath)
+            utils.get_mark_multi(imgpath, cav_mat, savepath=markpath)
 
 if __name__ == "__main__":
     main()
