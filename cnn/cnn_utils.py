@@ -210,6 +210,61 @@ def gen_sample(img, img_mark, rate=0.5, boxsize=10,px_over=5):
 
     return data,label
 
+def gen_sample_multi(img, img_mark, boxsize=10,px_over=5):
+    """
+    Generate samples by splitting the pixel classified image with provided boxsize
+
+    Input
+    -----
+    img: np.ndarray
+        The 2D raw image
+    img_mark: np.ndarray
+        The 2D marked image
+    rate: float
+        The rate of cavity pixels in the box, belongs to (0,1), default as 0.5
+    boxsize: integer
+        Size of the box, default as 10
+    px_over: integer
+        Overlapped pixels, default as 5
+
+    Output
+    ------
+    data: np.ndarray
+        The matrix holding samples, each column represents one sample
+    label: np.ndarray
+        Labels with respect to samples, could be 0, 1, and 2.
+    """
+    # Init
+    rows,cols = img.shape
+    px_diff = boxsize - px_over
+    # Number of boxes
+    box_rows = int(np.floor(rows/px_diff)) - 1
+    box_cols = int(np.floor(cols/px_diff)) - 1
+    # init data and label
+    data = np.zeros((box_rows*box_cols, boxsize**2))
+    label = np.zeros((box_rows*box_cols, 1))
+
+    # Split
+    for i in range(box_rows):
+        for j in range(box_cols):
+            sample = img[i*px_diff:i*px_diff+boxsize,
+                         j*px_diff:j*px_diff+boxsize]
+            label_mat = img_mark[i*px_diff:i*px_diff+boxsize,
+                                 j*px_diff:j*px_diff+boxsize]
+            data[i*box_rows+j,:] = sample.reshape((boxsize**2, ))
+            # get label
+            mask = label_mat.reshape((boxsize**2,))
+            mask0 = len(np.where(mask==0)[0])
+            mask1 = len(np.where(mask==127)[0])
+            mask2 = len(np.where(mask==255)[0])
+            mask_mat = np.array([mask0,mask1,mask2])
+            l = np.where(mask_mat == mask_mat.max())[0][0]
+            # label[i*box_rows+j,0] = np.where(hist==hist.max())[0][0]
+            label[i*box_rows+j,0] = l
+
+    return data,label
+
+
 def get_reg(cntpath,cavpath):
     """
     Get image coordinates of cavities
@@ -305,6 +360,67 @@ def get_mark(imgpath, cav_mat, savepath=None):
 
     return img_mark
 
+def get_mark_multi(betapath, cav_mat,thrs=0.1,logflag=False, savepath=None):
+    """
+    Mark the image with cavity region, three classes
+
+    Input
+    =====
+    betapath: str
+        Path of the beta fitted image
+    thrs: float
+        Threshold of the beta function to get edge
+        between extended and the background.
+    cav_mat: list
+        List of the cavities
+
+    Output
+    ======
+    img_mark: np.ndarray
+        The marked image, pixels in cavities are marked as one,
+        the rest are set as zero.
+    """
+    # load beta image
+    h =  fits.open(betapath)
+    img = (h[0].data).astype(float)
+    rows,cols = img.shape
+
+    # Normalize and thres
+    if logflag:
+        img = np.log10(img + np.abs(img.min()) + 1e-5) # logarithmize
+    img_norm = (img - img.min()) / (img.max() - img.min())
+    img_mark = img_norm
+    img_mark[np.where(img_norm >= thrs)] = 2
+    img_mark[np.where(img_norm < thrs)] = 0
+
+    # Fill
+    for cav in cav_mat:
+        # focus points
+        ang = cav[4] / 180 * np.pi
+        maj = cav[2]
+        min = cav[3]
+        c = np.sqrt(maj**2 - min**2)
+        f1 = np.array([c,0])
+        f2 = np.array([-c,0])
+        # rotate
+        rot_mat = np.array([[np.cos(ang),-np.sin(ang)],[np.sin(ang),np.cos(ang)]])
+        f1 = np.dot(rot_mat, f1) + np.array([cav[0], cav[1]])
+        f2 = np.dot(rot_mat, f2) + np.array([cav[0], cav[1]])
+        # mark
+        for i in range(cols):
+            for j in range(rows):
+                d = (np.sqrt((i-f1[0])**2 + (j-f1[1])**2) +
+                        np.sqrt((i-f2[0])**2 + (j-f2[1])**2))
+                if d <= 2*maj:
+                    img_mark[j,i] = 1
+
+    if savepath != None:
+        #h[0].data = img_mark
+        #h.writeto(savepath,overwrite=True)
+        imsave(savepath,np.flipud(img_mark))
+
+    return img_mark
+
 def img_recover(data, label, imgsize=(400, 400), px_over=5):
     """Revoer the image after classification.
 
@@ -340,6 +456,47 @@ def img_recover(data, label, imgsize=(400, 400), px_over=5):
         for j in range(box_cols):
             img[i*px_diff:i*px_diff+boxsize,
                 j*px_diff:j*px_diff+boxsize] += label[i*box_rows+j]
+
+    return img
+
+def img_recover_multi(data, label, imgsize=(400, 400), px_over=5):
+    """Revoer the image after classification.
+
+    Inputs
+    ======
+    data: np.ndarray
+        the splitted samples data of the observation
+    label: np.ndarray
+        the estimated labels
+    imgsize: tuple
+        shape of the image
+    px_over: integer
+        the overlapped pixels
+
+    Output
+    ======
+    img: np.ndarray
+        the recovered image
+    """
+    # Init
+    img = np.zeros(imgsize)
+
+    # Get params
+    numsamples, boxsize = data.shape
+    boxsize = int(np.sqrt(boxsize))
+    # Number of boxes
+    px_diff = boxsize - px_over
+    box_rows = int(np.floor(imgsize[0]/px_diff)) - 1
+    box_cols = int(np.floor(imgsize[1]/px_diff)) - 1
+
+    # recover
+    for i in range(box_rows):
+        for j in range(box_cols):
+            if label[i*box_rows+j] == 2:
+                img[i*px_diff:i*px_diff+boxsize,j*px_diff:j*px_diff+boxsize] += 0
+            else:
+                img[i*px_diff:i*px_diff+boxsize,
+                    j*px_diff:j*px_diff+boxsize] += label[i*box_rows + j]
 
     return img
 
