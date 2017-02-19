@@ -92,17 +92,17 @@ def main():
             # load images
             h = fits.open(imgpath)
             img = h[0].data
-            img_mark = misc.imread(markpath) / 255
+            img_mark = misc.imread(markpath)
 
             # get split samples
             print('[1] Generating split samples...')
-            data,label = utils.gen_sample(img, img_mark, rate=0.5, boxsize=10, px_over=5)
+            data,label = utils.gen_sample_multi(img, img_mark, boxsize=10, px_over=5)
             # get recovered image
             print('[2] Getting recovered images...')
-            img_re = utils.img_recover(data,label,imgsize=img.shape, px_over=5)
+            img_re = utils.img_recover_multi(data,label,imgsize=img.shape, px_over=5)
             # get edge detection
             print('[3] Doing edge detection...')
-            img_edge = utils.cav_edge(img_re, sigma=1)
+            img_edge = utils.cav_edge(img_re, sigma=2)
             # locate cavities
             print('[4] Locating cavities...')
             utils.cav_locate(img_edge, obspath=obspath, rate=0.6)
