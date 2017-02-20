@@ -73,6 +73,13 @@ def load_data(inpath, ratio_train = 0.8, ratio_val = 0.2):
     label_ext = data['label_ext']
     label_cav = data['label_cav']
 
+    # manually repeat the minor categories
+    data_ext = np.row_stack((data_ext, data_ext, data_ext))
+    label_ext = np.row_stack((label_ext, label_ext, label_ext))
+
+    data_cav = np.row_stack((data_cav, data_cav, data_cav, data_cav))
+    label_cav = np.row_stack((label_cav, label_cav, label_cav, label_cav))
+
     # boxsize
     box = data_bkg.shape[1]
     boxsize = int(np.sqrt(box))
@@ -177,7 +184,7 @@ def cnn_build(boxsize=10, num_class=3, kernel_size=[2,3,4], kernel_num=[12,12,12
         # Max pooling
         if pool_flag[k]:
             network = lasagne.layers.MaxPool2DLayer(network, pool_size=(2,2))
-            s = (s - kernel_size[k] + 1) / 2
+            s = (s - kernel_size[k] + 1) // 2
         else:
             s = s = kernel_size[k] + 1
 
@@ -252,9 +259,9 @@ def cnn_train(inputs_train, targets_train, inputs_val, targets_val,
     # Init
     input_var = T.tensor4('inputs')
     target_var = T.ivector('targets')
-    network = cnn_build(boxsize=10, num_class=3,
-                              kernel_size=[2,3,4], kernel_num=[12,12,12],
-                              pool_flag=[False,False,False], input_var=input_var)
+    network = cnn_build(boxsize=20, num_class=3,
+                              kernel_size=[5,5,5], kernel_num=[15,15,15],
+                              pool_flag=[False,False,True], input_var=input_var)
 
     # Create the loss expression for training
     prediction = lasagne.layers.get_output(network)
@@ -421,3 +428,46 @@ def cnn_load(modelpath):
     fp.close()
 
     return model
+
+def get_map(network,savepath=None):
+    """
+    Get the feature maps from the trained network
+
+    Inputs
+    ======
+    network: lasagne.layers
+        The trained network
+    savepath: str
+        Path to save the maps, default as None
+
+    Output
+    ======
+    maps: dict
+        The dict that saves the maps
+    """
+    # Init
+    params = lasagne.layers.get_all_params(network,
+                                           regularizable=True,
+                                           unwrap_shared=False)
+    # delete useless params
+    # del(params[-4:])
+    # get weights and biases
+    maps = {}
+    # numlayer = len(params)//2
+    numlayer = len(params)
+    for i in range(numlayer-2):
+        w = params[i]
+        weight = w.get_value()
+        # weight = weight.sum(axis=1)
+        # b = params[i+1]
+        key_weight = ('w%d' % (i+1))
+        # key_bias = ('b%d' % (i+1))
+        maps[key_weight] = weight
+        # maps[key_bias] = b.get_value()
+
+    if not savepath is None:
+        print('Saving the parameters...')
+        sio.savemat(savepath, maps)
+
+    return maps
+
