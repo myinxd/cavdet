@@ -24,10 +24,14 @@ def main():
     # Init
     parser = argparse.ArgumentParser(description="Get samples to train CNN")
     # Parameters
-    parser.add_argument("inpath", help="path of the folder saving samples")
+    parser.add_argument("inpath", help="path of the folder saving samples.")
+    parser.add_argument("savename", help="file name to save the combined mat.")
+    parser.add_argument("matname", help="name of the sample data mat.")
     args = parser.parse_args()
 
     inpath = args.inpath
+    savename = args.savename
+    matname = args.matname
     # ratio = float(args.ratio)
 
     # Init
@@ -51,7 +55,7 @@ def main():
             print("The observation %s does not exist." % obspath)
         else:
             print("Processing on sample %s ..." % s)
-            matpath = os.path.join(obspath, 'sample_20.mat')
+            matpath = os.path.join(obspath, matname)
             # load samples
             dataset = sio.loadmat(matpath)
             # separate samples
@@ -79,7 +83,7 @@ def main():
     # get train and test sample
 
     # save
-    sample_path = os.path.join(inpath, 'sample_large_10')
+    sample_path = os.path.join(inpath, savename)
     print("Saving samples ...")
     sio.savemat(sample_path, {"data_bkg": data_bkg,
                               "data_ext": data_ext,

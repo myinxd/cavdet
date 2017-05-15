@@ -24,7 +24,7 @@ import numpy as np
 import utils_pro as utils
 import utils_cnn as builder
 
-'''
+
 def main():
     """The main function"""
 
@@ -34,11 +34,20 @@ def main():
     parser.add_argument("obspath", help="path of the observation")
     parser.add_argument("netpath", help="path of the trained net.")
     parser.add_argument("numgra", help="number of granule")
+    parser.add_argument("matname", help="name of the sample data mat.")
     args = parser.parse_args()
 
     obspath = args.obspath
     netpath = args.netpath
     numgra = int(args.numgra)
+    matname = args.matname
+
+    # get boxsize and px_over
+    matinfo = matname.split('/')[-1]
+    matinfo = matinfo[0:-4].split('_')
+    boxsize = int(matinfo[-2])
+    px_diff = int(matinfo[-1])
+    px_over = boxsize - px_diff 
 
     # Judge existance of the path
     if not os.path.exists(obspath):
@@ -46,13 +55,13 @@ def main():
         return
 
 
-    samplepath = os.path.join(obspath, 'sample_20.mat')
+    samplepath = os.path.join(obspath, matname)
     imgrecover = os.path.join(obspath,'img_re.png')
     imgmask = os.path.join(obspath,'img_mark.png')
     imgmod = os.path.join(obspath,'img_mod.png')
     imgedge = os.path.join(obspath, 'img_edge.png')
     estpath = os.path.join(obspath, 'sample_est.mat')
-    asspath = os.path.join(obspath, 'asses.txt')
+    asspath = os.path.join(obspath, 'assess.txt')
 
     # load sample
     print('[1] Loading sample set...')
@@ -67,7 +76,7 @@ def main():
     label = builder.get_vote(inpath=netpath, numgra=numgra, data=data_re)
     # get recovered image
     print('[3] Getting recovered images...')
-    img_re = utils.img_recover(data, label, imgsize=(200,200), px_over=5)
+    img_re = utils.img_recover(data, label, imgsize=(200,200), px_over=px_over)
     # get modified image
     img_mask = misc.imread(imgmask)
     img_mask[np.where(img_mask==255)] = 0
@@ -80,7 +89,7 @@ def main():
     img_edge = utils.cav_edge(img_mod, sigma=3)
     # locate cavities
     print('[5] Locating cavities...')
-    utils.cav_locate(img_edge, obspath=obspath, rate=0.6)
+    utils.cav_locate(img_edge, obspath=obspath, rate=0.8)
 
     # save result
     print('[6] Saving results...')
@@ -89,7 +98,7 @@ def main():
     misc.imsave(imgedge, img_edge * 255)
 
     # assesment
-    r_acc,r_sen,r_spe = builder.get_asses(img_mask[0:200,0:200],np.flipud(img_mod))
+    r_acc,r_sen,r_spe = builder.get_assess(img_mask[0:200,0:200],np.flipud(img_mod))
     if os.path.exists(asspath):
         os.remove(asspath)
     fp = open(asspath,'a+')
@@ -109,19 +118,20 @@ def main():
     parser.add_argument("inpath", help="path of the folder saving samples")
     parser.add_argument("netpath", help="path of the trained network.")
     parser.add_argument("numgra", help="number of granule.")
+    parser.add_argument("matname", help="name of the sample data mat.")
     args = parser.parse_args()
 
     inpath = args.inpath
     netpath = args.netpath
     numgra = int(args.numgra)
+    matname = args.matname
+    # get boxsize and px_over
+    matinfo = matname[0:-5].split('_')
+    boxsize = int(matinfo[-2])
+    px_diff = int(matinfo[-1])
+    px_over = boxsize - px_diff
 
     # load the network
-    """
-    print('[0] Loading the trained network...')
-    net = builder.cnn_load(netpath)
-    network = net['network']
-    est_fn = net['est_fn']
-    """
     if not os.path.exists(inpath):
         print("The inpath does not exist.")
         return
@@ -134,7 +144,7 @@ def main():
             print("The observation %s does not exist." % obspath)
         else:
             print("Processing on sample %s ..." % obs)
-            samplepath = os.path.join(obspath, 'sample_20.mat')
+            samplepath = os.path.join(obspath, matname)
             imgrecover = os.path.join(obspath, 'img_re.png')
             imgmod = os.path.join(obspath, 'img_mod.png')
             imgedge = os.path.join(obspath, 'img_edge.png')
@@ -155,7 +165,7 @@ def main():
             # get recovered image
             print('[3] Getting recovered images...')
             img_re = utils.img_recover(
-                data, label, imgsize=(200, 200), px_over=5)
+                data, label, imgsize=(200, 200), px_over=px_over)
             # get modified image
             img_mask = misc.imread(imgmask)
             img_mask[np.where(img_mask == 255)] = 0
@@ -186,7 +196,7 @@ def main():
             fp.write("Accuracy: %f\n" % r_acc)
             fp.write("Sensitivity: %f\n" % r_sen)
             fp.write("Specificity: %f\n" % r_spe)
-
+'''
 
 if __name__ == "__main__":
     main()

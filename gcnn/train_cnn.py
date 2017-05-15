@@ -14,6 +14,7 @@ import argparse
 import numpy as np
 
 import utils_cnn as utils
+import mailsender
 
 
 def main():
@@ -37,8 +38,8 @@ def main():
         return
 
     # Load data
-    x_train, y_train, x_val, y_val, x_test, y_test, boxsize = utils.load_data_gra(
-        inpath=inpath)
+    x_train, y_train, x_val, y_val, x_test, y_test, boxsize = utils.load_data(
+        inpath=inpath, ratio_train=0.9, ratio_val=0.2)
     # build the network
     # train
     # numgra = x_train['numgra']
@@ -76,6 +77,14 @@ def main():
         paramname = ("params%d.mat" % (i + 1))
         parampath = os.path.join(outpath, paramname)
         utils.get_map(network, parampath)
+
+    mail_msg = "Job done!"
+    from_user = "mazhixian@sjtu.edu.cn"
+    from_user_pw = "190fudanmzxmy*"
+    to_user = "zxma_sjtu@qq.com"
+    mail_sub = "Transform fits to jpeg"
+    mailsender.send_mail(from_user, from_user_pw, to_user,
+                            mail_sub, mail_msg)
 
 
 if __name__ == "__main__":
