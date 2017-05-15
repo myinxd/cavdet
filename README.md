@@ -28,18 +28,12 @@ In addition, the compurtation can be accelerated by parallelly processing with G
 
 
 ## References
-- Theano tutorial 
-  http://www.deeplearning.net/software/theano/
-- Lasagne tutorial 
-  http://lasagne.readthedocs.io/en/latest/user/tutorial.html
-- Save python data by pickle
-  http://www.cnblogs.com/pzxbc/archive/2012/03/18/2404715.html
-- An image of diffuse emission 
-  http://cxc.cfa.harvard.edu/ciao/threads/diffuse_emission/
-- Angular diameter distance,
-  https://en.wikipedia.org/wiki/Angular_diameter_distance
-- astroquery.Ned
-  http://astroquery.readthedocs.io/en/latest/ned/ned.html
+- [Theano tutorial](http://www.deeplearning.net/software/theano/)
+- [Lasagne tutorial](http://lasagne.readthedocs.io/en/latest/user/tutorial.html)
+- [Save python data by pickle](http://www.cnblogs.com/pzxbc/archive/2012/03/18/2404715.html)
+- [An image of diffuse emission](http://cxc.cfa.harvard.edu/ciao/threads/diffuse_emission/)
+- [Angular diameter distance](https://en.wikipedia.org/wiki/Angular_diameter_distance)
+- [astroquery.Ned](http://astroquery.readthedocs.io/en/latest/ned/ned.html)
 
 ## Author
 - Zhixian MA <`zxma_sjtu(at)qq.com`>
