@@ -78,13 +78,7 @@ def main():
         parampath = os.path.join(outpath, paramname)
         utils.get_map(network, parampath)
 
-    mail_msg = "Job done!"
-    from_user = "mazhixian@sjtu.edu.cn"
-    from_user_pw = "190fudanmzxmy*"
-    to_user = "zxma_sjtu@qq.com"
-    mail_sub = "Transform fits to jpeg"
-    mailsender.send_mail(from_user, from_user_pw, to_user,
-                            mail_sub, mail_msg)
+    # mailsender.send_mail(from_user, from_user_pw, to_user, mail_sub, mail_msg)
 
 
 if __name__ == "__main__":
