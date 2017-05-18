@@ -438,7 +438,7 @@ def get_mark_multi(betapath, cav_mat, thrs=0.1, logflag=False, savepath=None):
     return img_mark
 
 
-def img_recover(data, label, imgsize=(400, 400), px_over=5):
+def img_recover(data, label, imgsize=(400, 400), px_over=5, thrs=3):
     """Revoer the image after classification.
 
     Inputs
@@ -475,7 +475,6 @@ def img_recover(data, label, imgsize=(400, 400), px_over=5):
                 j * px_diff:j * px_diff + boxsize] += label[i * box_rows + j]
 
     # Set a thrshold
-    thrs = 3
     img[np.where(img < thrs)] = 0
     img[np.where(img >= thrs)] = 1
 
@@ -558,7 +557,7 @@ def cav_edge(img, sigma):
     return img_edge
 
 
-def cav_locate(img_edge, obspath=None, cntpath='cnt.reg', regpath='cav_det.reg', rate=0.8):
+def cav_locate(img_re, obspath=None, cntpath='cnt.reg', regpath='cav_det.reg', rate=0.8):
     """
     Locate cavities in the edge detected image
 
@@ -567,10 +566,15 @@ def cav_locate(img_edge, obspath=None, cntpath='cnt.reg', regpath='cav_det.reg',
     [1] Regionprops in scikit-image
         http://blog.csdn.net/jkwwwwwwwwww/article/details/54381298
 
+    log
+    ===
+    [20170518] Do not do edge detection on the reunited image, directly
+               detecte the connected domains.
+
     Inputs
     ======
-    img_edge: np.ndarray
-        the edge detected image
+    img_re: np.ndarray
+        the reunited image
     obspath: str
         path of the observation, default as None
     cntpath: str
@@ -587,11 +591,10 @@ def cav_locate(img_edge, obspath=None, cntpath='cnt.reg', regpath='cav_det.reg',
     """
     # Init
     cav_reg = []
-    # Flip updown, differ between image and fits
-    img_edge = np.flipud(img_edge)
 
     # Get connectivity regions
-    props_label = measure.label(img_edge, connectivity=img_edge.ndim)
+    img_re = np.flipud(img_re)
+    props_label = measure.label(img_re.astype('bool'), connectivity=img_re.ndim)
     # Get connected region properties
     props = measure.regionprops(props_label)
 
@@ -599,7 +602,7 @@ def cav_locate(img_edge, obspath=None, cntpath='cnt.reg', regpath='cav_det.reg',
     for r in props:
         reg = [r.centroid[1], r.centroid[0],
                r.major_axis_length / 2 * rate, r.minor_axis_length / 2 * rate,
-               r.orientation / np.pi * 180]
+               np.abs(r.orientation) / np.pi * 180]
         cav_reg.append(reg)
 
     # save
@@ -607,7 +610,7 @@ def cav_locate(img_edge, obspath=None, cntpath='cnt.reg', regpath='cav_det.reg',
         cntpath = os.path.join(obspath, cntpath)
         regpath = os.path.join(obspath, regpath)
         # get physical centers
-        rows, cols = img_edge.shape
+        rows, cols = img_re.shape
         fp_cnt = open(cntpath, 'r')
         cnt_reg = fp_cnt.readline()
         cnt_reg = cnt_reg[4:-1]
@@ -627,7 +630,6 @@ def cav_locate(img_edge, obspath=None, cntpath='cnt.reg', regpath='cav_det.reg',
         fp.close()
 
     return cav_reg
-
 
 def get_man_re(img_re, img_mask, savepath=None):
     """
