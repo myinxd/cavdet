@@ -87,7 +87,7 @@ def save_params(params_dict, savepath):
 def genBetaModel(matshape, cen, betaparam):
     """
     Generate beta model with given parameters
-    
+
     inputs
     ======
     matshape: tuple or list
@@ -103,7 +103,7 @@ def genBetaModel(matshape, cen, betaparam):
           "majaxis": float,
           "minaxis": float,
         }
-    
+
     output
     ======
     matbeta: np.ndarray
@@ -114,7 +114,7 @@ def genBetaModel(matshape, cen, betaparam):
         return None
     # Init matbeta
     matbeta = np.zeros(matshape)
-    
+
     # load paramters
     A = betaparam['A']
     r0 = betaparam['r0']
@@ -123,14 +123,15 @@ def genBetaModel(matshape, cen, betaparam):
     majaxis = betaparam['majaxis']
     minaxis = betaparam['minaxis']
     ecc = majaxis / minaxis # eccentricity
-    
+
     # Generate meshgrids
     X = np.linspace(1, matshape[0], matshape[0])
     Y = np.linspace(1, matshape[1], matshape[1])
-    
+
+    # anti-clock
     rot = np.array([[np.cos(theta), -np.sin(theta)],
                     [np.sin(theta),np.cos(theta)]])
-    
+
     # Calc
     for j, x in enumerate(X):
         for i,y in enumerate(Y):
@@ -139,30 +140,32 @@ def genBetaModel(matshape, cen, betaparam):
             r = np.matmul(rot, np.array([x_r, y_r]))
             r = r[0]**2 + r[1]**2 * ecc**2
             matbeta[i, j] = A * (1 + r/r0**2)**(-np.abs(beta))
-    
-    return matbeta    
 
-def genCavDepression(matbeta, cen, cavparam, deprate):
+    return matbeta
+
+def genCavDepression(matbeta, cen, cavparam, angbeta, deprate):
     """
     Mock cavities on the beta model with depression, default with two caves
-    
+
     inputs
     ======
     matbeta: np.ndarray
         The beta model matrix
     cen: tuple or list
         Location of the center
+    angbeta: double
+        Roration angle of the beta model
     cavparam: dict
         Paramters of the cavities
         {"majaxis": float,
          "minaxis": float,
          "theta": float,
          "phi": float,
-         "dist": float,        
+         "dist": float,
         }
     deprate: float
         Rate of depression of cavities in the beta model
-    
+
     output
     ======
     matcav: np.ndarray
@@ -171,7 +174,7 @@ def genCavDepression(matbeta, cen, cavparam, deprate):
     # params
     majaxis = cavparam["majaxis"] / 2
     minaxis = cavparam["minaxis"] / 2
-    theta = cavparam["theta"]
+    theta = cavparam["theta"] + angbeta
     phi = cavparam["phi"]
     dist = cavparam["dist"]
 
@@ -181,10 +184,10 @@ def genCavDepression(matbeta, cen, cavparam, deprate):
                     [np.sin(phi),np.cos(phi)]])
     rot2 = np.array([[np.cos(phi), -np.sin(phi)],
                     [np.sin(phi),np.cos(phi)]])
-    
+
     matcav = matbeta.copy()
     matshape = matbeta.shape
-    X = np.linspace(1, matshape[0], matshape[0]) 
+    X = np.linspace(1, matshape[0], matshape[0])
     Y = np.linspace(1, matshape[1], matshape[1])
     # cavone
     c = np.sqrt(majaxis**2 - minaxis**2)
@@ -198,29 +201,113 @@ def genCavDepression(matbeta, cen, cavparam, deprate):
     F2_c2 = core2 + np.matmul(rot2,np.array([-c,0]))
     print(F1_c1)
     print(F2_c1)
-    print(F1_c2)
-    print(F2_c2)
-    
+
     # get depressions
     for j, x in enumerate(X):
         for i, y in enumerate(Y):
             x_r = x - cen[0] # col
             y_r = y - cen[1] # row
             # in cav one?
-            x_r1, y_r1 = np.matmul(rot1,np.array([x_r, y_r]))
-            d1_c1 = np.sqrt((x_r1 - F1_c1[0])**2 + (y_r1 - F1_c1[1])**2)
-            d1_c2 = np.sqrt((x_r1 - F2_c1[0])**2 + (y_r1 - F2_c1[1])**2)
+            d1_c1 = np.sqrt((x_r - F1_c1[0])**2 + (y_r - F1_c1[1])**2)
+            d1_c2 = np.sqrt((x_r - F2_c1[0])**2 + (y_r - F2_c1[1])**2)
             d1 = d1_c1 + d1_c2
             # in cav two?
-            x_r2, y_r2 = np.matmul(rot2,np.array([x_r, y_r]))
-            d2_c1 = np.sqrt((x_r2 - F1_c2[0])**2 + (y_r2 - F1_c2[1])**2)
-            d2_c2 = np.sqrt((x_r2 - F2_c2[0])**2 + (y_r2 - F2_c2[1])**2)
-            d2 = d2_c1 + d2_c2           
+            d2_c1 = np.sqrt((x_r - F1_c2[0])**2 + (y_r - F1_c2[1])**2)
+            d2_c2 = np.sqrt((x_r - F2_c2[0])**2 + (y_r - F2_c2[1])**2)
+            d2 = d2_c1 + d2_c2
             # Get indices of pixles in the cavities
             if d1 <= 2*majaxis:
                 # rotate
-                matcav[i, j] *= (1 - deprate)    
+                matcav[i, j] *= (1 - deprate)
             elif d2 <= 2*majaxis:
                 matcav[i, j] *= (1 - deprate)
-                
+
     return matcav,rot1,rot2
+
+def genCavProfile(matbeta, cen, cavparam, angbeta, deprate):
+    """
+    Generate profile of the cav
+
+    inputs
+    ======
+    matbeta: np.ndarray
+        The beta model matrix
+    cen: tuple or list
+        Location of the center
+    angbeta: double
+        Roration angle of the beta model
+    cavparam: dict
+        Paramters of the cavities
+        {"majaxis": float,
+         "minaxis": float,
+         "theta": float,
+         "phi": float,
+         "dist": float,
+        }
+    deprate: float
+        Rate of depression of cavities in the beta model
+
+    output
+    ======
+    matcav: np.ndarray
+        The matrix with cavity added
+    """
+    # params
+    majaxis = cavparam["majaxis"] / 2
+    minaxis = cavparam["minaxis"] / 2
+    theta = cavparam["theta"] + angbeta
+    phi = cavparam["phi"]
+    dist = cavparam["dist"]
+
+    rot = np.array([[np.cos(theta), -np.sin(theta)],
+                    [np.sin(theta),np.cos(theta)]])
+    rot1 = np.array([[np.cos(phi), -np.sin(phi)],
+                    [np.sin(phi),np.cos(phi)]])
+    rot2 = np.array([[np.cos(phi), -np.sin(phi)],
+                    [np.sin(phi),np.cos(phi)]])
+
+    matcav = matbeta
+    matshape = matbeta.shape
+    X = np.linspace(1, matshape[0], matshape[0])
+    Y = np.linspace(1, matshape[1], matshape[1])
+    # cavone
+    c = np.sqrt(majaxis**2 - minaxis**2)
+    core1 = np.matmul(rot, np.array([dist, 0]))
+    core2 = np.matmul(rot, np.array([-dist, 0]))
+    print(core1)
+    print(core2)
+    F1_c1 = core1 + np.matmul(rot1,np.array([c,0]))
+    F2_c1 = core1 + np.matmul(rot1,np.array([-c,0]))
+    F1_c2 = core2 + np.matmul(rot2,np.array([c,0]))
+    F2_c2 = core2 + np.matmul(rot2,np.array([-c,0]))
+    print(F1_c1)
+    print(F2_c1)
+
+    # get depressions
+    row = []
+    col = []
+    height = []
+    for j, x in enumerate(X):
+        for i, y in enumerate(Y):
+            x_r = x - cen[0] # col
+            y_r = y - cen[1] # row
+            # in cav one?
+            d1_c1 = np.sqrt((x_r - F1_c1[0])**2 + (y_r - F1_c1[1])**2)
+            d1_c2 = np.sqrt((x_r - F2_c1[0])**2 + (y_r - F2_c1[1])**2)
+            d1 = d1_c1 + d1_c2
+            # in cav two?
+            d2_c1 = np.sqrt((x_r - F1_c2[0])**2 + (y_r - F1_c2[1])**2)
+            d2_c2 = np.sqrt((x_r - F2_c2[0])**2 + (y_r - F2_c2[1])**2)
+            d2 = d2_c1 + d2_c2
+            # Get indices of pixles in the cavities
+            if np.abs(d1 - 2*majaxis) <= 1:
+                # rotate
+                row.append(y)
+                col.append(x)
+                height.append(matcav[i, j]*(1 - deprate))
+            elif np.abs(d2 - 2*majaxis) <= 1:
+                row.append(y)
+                col.append(x)
+                height.append(matcav[i, j]*(1 - deprate))
+
+    return np.array(row),np.array(col),np.array(height)
