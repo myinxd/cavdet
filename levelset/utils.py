@@ -311,3 +311,54 @@ def genCavProfile(matbeta, cen, cavparam, angbeta, deprate):
                 height.append(matcav[i, j]*(1 - deprate))
 
     return np.array(row),np.array(col),np.array(height)
+
+def genGaussFilter(imgshape,sigma):
+    """Generate the Gaussian filter
+    
+    Inputs
+    ======
+    imgshape: tuple
+        Shape of the Gaussian kernel
+    sigma: float
+        Sigma of the gaussian function
+    
+    Output
+    ======
+    gaussker: np.ndarray
+        The gausian kernel
+    """
+    x_c = imgshape[1] // 2 
+    y_c = imgshape[0] // 2
+    x = np.arange(-x_c,x_c+1)
+    y = np.arange(-y_c,y_c+1)
+    X, Y = np.meshgrid(x,y)
+    
+    gaussker = (1.0 / (np.sqrt(2*np.pi)*sigma) * 
+                np.exp(-(X**2)/(2*sigma**2)) * 
+                np.exp(-(Y**2)/(2*sigma**2)))
+    
+    return gaussker
+
+def getUnsharpMasking(img, sigma1=2.0, sigma2=10.0, kershape=(15, 15)):
+    from scipy.signal import convolve2d
+    """Do unsharp masking on the image"""
+    # generate Gaussian kernels
+    if kershape is None:
+        kershape1 = (np.fix(sigma1*5), np.fix(sigma1*5))
+        kershape2 = (np.fix(sigma2*5), np.fix(sigma2*5))
+    else:
+        kershape1 = kershape
+        kershape2 = kershape
+    gker1 = genGaussFilter(kershape1,sigma1)
+    gker2 = genGaussFilter(kershape2,sigma2)
+        
+    # convlve
+    img_c1 = convolve2d(img, gker1, mode='same')
+    img_c2 = convolve2d(img, gker2, mode='same')
+    
+    if sigma1 >= sigma2:
+        img_um = img_c1 - img_c2
+    else:
+        img_um = img_c2 - img_c1
+    
+    return img_um
