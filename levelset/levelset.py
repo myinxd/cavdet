@@ -5,7 +5,13 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from scipy.misc import imsave
 
+class printException(Exception):  
+    """
+    Ref: http://blog.csdn.net/kwsy2008/article/details/48468345
+    """
+    pass  
 
 class LevelSet():
     """
@@ -33,7 +39,8 @@ class LevelSet():
     """
     
     def __init__(self, imgshape, mu=1.0, nu=1.0, 
-                 lambda1=1.0, lambda2=1.0, dt=0.1):
+                 lambda1=1.0, lambda2=1.0, dt=0.1,
+                 init_mode=None, radius=None):
         """
         The initializer
         """
@@ -44,9 +51,34 @@ class LevelSet():
         self.lambda2 = lambda2
         self.dt = dt
         self.yita = 1e-8 # A little trick for avoiding divided by zero
+        self.init_mode = init_mode
+        self.radius = radius
         # Init phi
-        self.initPhi()
+        if self.init_mode is None:
+            self.initPhi()
+        elif self.init_mode == "cir":
+            self.initPhi_cir(radius=self.radius)
+        else:
+            raise printException("InitModeError")
     
+    def initPhi_cir(self, radius=None):
+        """
+        Init the phi function, i.e., the level set, circle case     
+        """
+        rows,cols = self.imgshape
+        if radius is None:
+            radius = min(rows, cols) // 4
+        # Init
+        self.phi = np.ones((rows, cols))
+        y = np.arange(-rows//2, rows//2)
+        x = np.arange(-cols//2, cols//2)
+        X,Y = np.meshgrid(x,y)
+        z = np.sqrt(X**2+Y**2)
+        
+        id_row,id_col = np.where(z > radius)
+        self.phi[id_row, id_col] = -1
+    
+     
     def initPhi(self):
         """
         Init the phi function, i.e., the level set
@@ -76,10 +108,10 @@ class LevelSet():
         """Calculate centroids of the internal and external regions
            segmented by the levelset function.
         """
-        idx_c1 = np.where(self.phi > 0)[0]
-        idx_c2 = np.where(self.phi < 0)[0]
-        c1 = np.sum(img[idx_c1]) / (len(idx_c1)+self.yita)
-        c2 = np.sum(img[idx_c2]) / (len(idx_c2)+self.yita)
+        idx_c1r, idx_c1c = np.where(self.phi > 0)
+        idx_c2r, idx_c2c = np.where(self.phi < 0)
+        c1 = np.sum(img[idx_c1r, idx_c1r]) / (len(idx_c1r)+self.yita)
+        c2 = np.sum(img[idx_c2r, idx_c2r]) / (len(idx_c2r)+self.yita)
         
         return c1,c2
     
@@ -118,11 +150,11 @@ class LevelSet():
                     # main body
                     Delta = self.dt/(np.pi*(1+self.phi[j,i]*self.phi[j,i]))
                     phi_x = self.phi[j,i+idr]-self.phi[j,i]
-                    phi_y = (self.phi[j+idd,i]-self.phi[j+idu,i])/2
+                    phi_y = (self.phi[j+idd,i]-self.phi[j+idu,i])/2.0
                     IDivR = 1.0/np.sqrt(self.yita+phi_x**2+phi_y**2)
                     phi_x = self.phi[j,i]-self.phi[j,i+idl]
                     IDivL = 1.0/np.sqrt(self.yita+phi_x**2 + phi_y**2)
-                    phi_x = (self.phi[j,i+idr] - self.phi[j,i+idl])/2
+                    phi_x = (self.phi[j,i+idr] - self.phi[j,i+idl])/2.0
                     phi_y = self.phi[j+idd,i] - self.phi[j,i]
                     IDivD = 1.0/np.sqrt(self.yita + phi_x**2 + phi_y**2)
                     phi_y = self.phi[j,i] - self.phi[j+idu,i]
@@ -156,7 +188,8 @@ class LevelSet():
             
             if np.mod(it, 5) == 0:
                 t = time.strftime('%Y-%m-%d: %H:%M:%S', time.localtime(time.time())) 
-                print("[%s] Iter: %d     PhiDiffNorm: %.3f" % (t,it,phidiffnorm))
+                imsave("./tmp/phi_%d.png" % it, self.phi)
+                print("[%s] Iter: %d     PhiDiffNorm: %.5f" % (t,it,phidiffnorm))
   
     def drawResult(self,img,normflag=True,logflag=False):
         """draw the segmentation curve"""
@@ -168,7 +201,7 @@ class LevelSet():
 
         ax0 = plt.subplot(gs[0])
         ax0 = plt.imshow(img)
-        ax0 = plt.contour(self.phi,level=[0]);
+        ax0 = plt.contour(self.phi,levels=[0.0]);
         plt.xlabel("horizontal")
         plt.ylabel("vertical")
         
