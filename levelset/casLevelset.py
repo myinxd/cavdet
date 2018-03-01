@@ -7,18 +7,22 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 from scipy.misc import imsave
 
+from levelset import LevelSet
+
 class printException(Exception):  
     """
     Ref: http://blog.csdn.net/kwsy2008/article/details/48468345
     """
     pass  
 
-class LevelSet():
+class CasLevelSet(LevelSet):
     """
-    Piecewise constant levelset
+    Piecewise constant levelset: cascaded case
     
     Inputs
     ======
+    phi_pre: np.ndarray
+        The previous levelset function
     imgshape: tuple 
         shape of the image to be segmented
     mu: float
@@ -38,21 +42,16 @@ class LevelSet():
         http://dx.doi.org/10.5201/ipol.2012.g-cv
     """
     
-    def __init__(self, imgshape, mu=1.0, nu=1.0, 
+    def __init__(self, phi_pre, imgshape, mu=1.0, nu=1.0, 
                  lambda1=1.0, lambda2=1.0, dt=0.1,
-                 init_mode=None, radius=None):
+                 init_mode=None, radius=None, lev=0.0):
         """
         The initializer
         """
-        self.imgshape = imgshape
-        self.mu = mu
-        self.nu = nu
-        self.lambda1 = lambda1
-        self.lambda2 = lambda2
-        self.dt = dt
-        self.yita = 1e-8 # A little trick for avoiding divided by zero
-        self.init_mode = init_mode
-        self.radius = radius
+        self.phi_pre = phi_pre
+        self.lev = lev
+        super().__init__(imgshape,mu,nu,lambda1,lambda2,dt,init_mode,radius)
+        
         # Init phi
         if self.init_mode is None:
             self.initPhi()
@@ -60,7 +59,8 @@ class LevelSet():
             self.initPhi_cir(radius=self.radius)
         else:
             raise printException("InitModeError")
-    
+        
+        
     def initPhi_cir(self, radius=None):
         """
         Init the phi function, i.e., the level set, circle case     
@@ -77,7 +77,11 @@ class LevelSet():
         
         id_row,id_col = np.where(z > radius)
         self.phi[id_row, id_col] = -1
-    
+        
+        # mask
+        id_pre_row, id_pre_col = np.where(self.phi_pre < self.lev)
+        self.phi[id_pre_row, id_pre_col] = np.nan
+
      
     def initPhi(self):
         """
@@ -94,22 +98,20 @@ class LevelSet():
         y = np.arange(0, rows, 1)
         X, Y = np.meshgrid(x,y)
         self.phi = np.sin(X*np.pi/5.0) * np.sin(Y*np.pi/5.0)
-    
-    def getNormalization(self, img, logflag=False):
-        """Normalize the image into [0.,1.0]"""
-        if logflag:
-            img = np.log10(img - img.min() + 1e-5)
-        img_max = img.max()
-        img_min = img.min()
         
-        return (img - img_min) / (img_max - img_min)
-    
+        # mask
+        id_pre_row, id_pre_col = np.where(self.phi_pre < self.lev)
+        self.phi[id_pre_row, id_pre_col] = np.nan    
+
+        
     def calcCentroids(self, img):
         """Calculate centroids of the internal and external regions
            segmented by the levelset function.
         """
-        idx_c1r, idx_c1c = np.where(self.phi > 0)
-        idx_c2r, idx_c2c = np.where(self.phi < 0)
+        phi = self.phi
+        phi[np.isnan(self.phi)] = 0
+        idx_c1r, idx_c1c = np.where(phi > 0)
+        idx_c2r, idx_c2c = np.where(phi < 0)
         c1 = np.sum(img[idx_c1r, idx_c1r]) / (len(idx_c1r)+self.yita)
         c2 = np.sum(img[idx_c2r, idx_c2r]) / (len(idx_c2r)+self.yita)
         
@@ -122,10 +124,17 @@ class LevelSet():
             img = self.getNormalization(img, logflag=logflag)
         # calc the region centroids as constands
         self.c1, self.c2 = self.calcCentroids(img)
+        # shrink the region
+        id_pre_row, id_pre_col = np.where(self.phi_pre > self.lev)
+        self.phi_margin = [id_pre_row.min(), id_pre_row.max(), 
+                           id_pre_col.min(), id_pre_col.max()]
+        #phi = self.phi[self.phi_margin[0]:self.phi_margin[1]+1,
+        #               self.phi_margin[2]:self.phi_margin[3]+1]
+        phi_mask = np.isnan(self.phi)
         # Iterate to optimize phi
         for it in range(niter):
             phidiffnorm = 0.0
-            for j in range(self.imgshape[0]):
+            for j in range(self.phi_margin[0], self.phi_margin[1]+1):
                 # top margin
                 if j == 0:
                     idu = 0
@@ -136,7 +145,7 @@ class LevelSet():
                     idd = 0
                 else:
                     idd = 1
-                for i in range(self.imgshape[1]):
+                for i in range(self.phi_margin[2], self.phi_margin[3]+1):
                     # left margin
                     if i == 0:
                         idl = 0
@@ -147,38 +156,42 @@ class LevelSet():
                         idr = 0
                     else:
                         idr = 1
-                    # main body
-                    Delta = self.dt/(np.pi*(1+self.phi[j,i]*self.phi[j,i]))
-                    phi_x = self.phi[j,i+idr]-self.phi[j,i]
-                    phi_y = (self.phi[j+idd,i]-self.phi[j+idu,i])/2.0
-                    IDivR = 1.0/np.sqrt(self.yita+phi_x**2+phi_y**2)
-                    phi_x = self.phi[j,i]-self.phi[j,i+idl]
-                    IDivL = 1.0/np.sqrt(self.yita+phi_x**2 + phi_y**2)
-                    phi_x = (self.phi[j,i+idr] - self.phi[j,i+idl])/2.0
-                    phi_y = self.phi[j+idd,i] - self.phi[j,i]
-                    IDivD = 1.0/np.sqrt(self.yita + phi_x**2 + phi_y**2)
-                    phi_y = self.phi[j,i] - self.phi[j+idu,i]
-                    IDivU = 1.0/np.sqrt(self.yita + phi_x**2 + phi_y**2)
+                    # if nan
+                    if phi_mask[j+idu,i] or phi_mask[j+idd,i] or phi_mask[j,i+idl] or phi_mask[j,i+idr]:
+                        continue
+                    else:
+                        # main body
+                        Delta = self.dt/(np.pi*(1+self.phi[j,i]*self.phi[j,i]))
+                        phi_x = self.phi[j,i+idr]-self.phi[j,i]
+                        phi_y = (self.phi[j+idd,i]-self.phi[j+idu,i])/2.0
+                        IDivR = 1.0/np.sqrt(self.yita+phi_x**2+phi_y**2)
+                        phi_x = self.phi[j,i]-self.phi[j,i+idl]
+                        IDivL = 1.0/np.sqrt(self.yita+phi_x**2 + phi_y**2)
+                        phi_x = (self.phi[j,i+idr] - self.phi[j,i+idl])/2.0
+                        phi_y = self.phi[j+idd,i] - self.phi[j,i]
+                        IDivD = 1.0/np.sqrt(self.yita + phi_x**2 + phi_y**2)
+                        phi_y = self.phi[j,i] - self.phi[j+idu,i]
+                        IDivU = 1.0/np.sqrt(self.yita + phi_x**2 + phi_y**2)
                     
-                    # Distances
-                    dist1 = (img[j,i] - self.c1)**2
-                    dist2 = (img[j,i] - self.c2)**2
+                        # Distances
+                        dist1 = (img[j,i] - self.c1)**2
+                        dist2 = (img[j,i] - self.c2)**2
                     
-                    # Update phi at current point j,i
-                    phi_last = self.phi[j,i]
-                    self.phi[j,i] = ((self.phi[j,i] + 
-                                      Delta*(self.mu*
-                                            (self.phi[j,i+idr]*IDivR +
-                                             self.phi[j,i+idl]*IDivL + 
-                                             self.phi[j+idd,i]*IDivD + 
-                                             self.phi[j+idu,i]*IDivU
-                                            )- 
-                                            self.nu - self.lambda1 * dist1 + 
-                                            self.lambda2 * dist2)
-                                     ) / 
-                                     (1.0 + Delta*self.mu*(IDivR+IDivL+IDivD+IDivU)))
-                    phidiff = self.phi[j,i] - phi_last
-                    phidiffnorm += phidiff ** 2
+                        # Update phi at current point j,i
+                        phi_last = self.phi[j,i]
+                        self.phi[j,i] = ((self.phi[j,i] + 
+                                          Delta*(self.mu*
+                                                (self.phi[j,i+idr]*IDivR +
+                                                 self.phi[j,i+idl]*IDivL + 
+                                                 self.phi[j+idd,i]*IDivD + 
+                                                 self.phi[j+idu,i]*IDivU
+                                                )- 
+                                                self.nu - self.lambda1 * dist1 + 
+                                                self.lambda2 * dist2)
+                                         ) / 
+                                         (1.0 + Delta*self.mu*(IDivR+IDivL+IDivD+IDivU)))
+                        phidiff = self.phi[j,i] - phi_last
+                        phidiffnorm += phidiff ** 2
                     
             if phidiffnorm <= phi_total and it >= 2:
                 break
@@ -188,7 +201,7 @@ class LevelSet():
             
             if np.mod(it, 5) == 0:
                 t = time.strftime('%Y-%m-%d: %H:%M:%S', time.localtime(time.time())) 
-                imsave("./tmp/phi1_%d.png" % it, self.phi)
+                imsave("./tmp/phi2_%d.png" % it, self.phi)
                 print("[%s] Iter: %d     PhiDiffNorm: %.5f" % (t,it,phidiffnorm))
   
     def drawResult(self,img,normflag=True,logflag=False):
@@ -202,6 +215,7 @@ class LevelSet():
         ax0 = plt.subplot(gs[0])
         ax0 = plt.imshow(img)
         ax0 = plt.contour(self.phi,levels=[0.0]);
+        ax1 = plt.contour(self.phi_pre, levels=[self.lev])
         plt.xlabel("horizontal")
         plt.ylabel("vertical")
         
