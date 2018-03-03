@@ -79,7 +79,7 @@ class CasLevelSet(LevelSet):
         self.phi[id_row, id_col] = -1
         
         # mask
-        id_pre_row, id_pre_col = np.where(self.phi_pre < self.lev)
+        id_pre_row, id_pre_col = np.where(self.phi_pre > self.lev)
         self.phi[id_pre_row, id_pre_col] = np.nan
 
      
@@ -100,7 +100,7 @@ class CasLevelSet(LevelSet):
         self.phi = np.sin(X*np.pi/5.0) * np.sin(Y*np.pi/5.0)
         
         # mask
-        id_pre_row, id_pre_col = np.where(self.phi_pre < self.lev)
+        id_pre_row, id_pre_col = np.where(self.phi_pre > self.lev)
         self.phi[id_pre_row, id_pre_col] = np.nan    
 
         
@@ -125,7 +125,7 @@ class CasLevelSet(LevelSet):
         # calc the region centroids as constands
         self.c1, self.c2 = self.calcCentroids(img)
         # shrink the region
-        id_pre_row, id_pre_col = np.where(self.phi_pre > self.lev)
+        id_pre_row, id_pre_col = np.where(self.phi_pre < self.lev)
         self.phi_margin = [id_pre_row.min(), id_pre_row.max(), 
                            id_pre_col.min(), id_pre_col.max()]
         #phi = self.phi[self.phi_margin[0]:self.phi_margin[1]+1,
