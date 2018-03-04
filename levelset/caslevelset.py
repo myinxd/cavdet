@@ -44,11 +44,12 @@ class CasLevelSet(LevelSet):
     
     def __init__(self, phi_pre, imgshape, mu=1.0, nu=1.0, 
                  lambda1=1.0, lambda2=1.0, dt=0.1,
-                 init_mode=None, radius=None):
+                 init_mode=None, radius=None, lev=0.0):
         """
         The initializer
         """
         self.phi_pre = phi_pre
+        self.lev = lev
         super().__init__(imgshape,mu,nu,lambda1,lambda2,dt,init_mode,radius)
         
         # Init phi
@@ -68,18 +69,17 @@ class CasLevelSet(LevelSet):
         if radius is None:
             radius = min(rows, cols) // 4
         # Init
-        self.phi = np.ones((rows, cols))
+        self.phi = np.ones((rows, cols)).astype('float')
         y = np.arange(-rows//2, rows//2)
         x = np.arange(-cols//2, cols//2)
         X,Y = np.meshgrid(x,y)
         z = np.sqrt(X**2+Y**2)
         
-        id_row,id_col = np.where(z > radius)
-        self.phi[id_row, id_col] = -1
+        self.phi[np.where(z > radius)] = -1.0
+        self.phi[np.where(z == radius)] = 0.0
         
         # mask
-        id_pre_row, id_pre_col = np.where(self.phi_pre < 0)
-        self.phi[id_pre_row, id_pre_col] = np.nan
+        self.phi[np.where(self.phi_pre > self.lev)] = np.nan
 
      
     def initPhi(self):
@@ -94,21 +94,20 @@ class CasLevelSet(LevelSet):
         rows,cols = self.imgshape
         # Init
         x = np.arange(0, cols, 1)
-        y = np.arange(0, cols, 1)
+        y = np.arange(0, rows, 1)
         X, Y = np.meshgrid(x,y)
         self.phi = np.sin(X*np.pi/5.0) * np.sin(Y*np.pi/5.0)
         
         # mask
-        id_pre_row, id_pre_col = np.where(self.phi_pre < 0)
-        self.phi[id_pre_row, id_pre_col] = np.nan    
+        self.phi[np.where(self.phi_pre > self.lev)] = np.nan    
 
         
     def calcCentroids(self, img):
         """Calculate centroids of the internal and external regions
            segmented by the levelset function.
         """
-        phi = self.phi
-        phi[np.isnan(self.phi)] = 0
+        phi = self.phi.copy()
+        phi[np.where(np.isnan(phi))] = 0
         idx_c1r, idx_c1c = np.where(phi > 0)
         idx_c2r, idx_c2c = np.where(phi < 0)
         c1 = np.sum(img[idx_c1r, idx_c1r]) / (len(idx_c1r)+self.yita)
@@ -123,17 +122,11 @@ class CasLevelSet(LevelSet):
             img = self.getNormalization(img, logflag=logflag)
         # calc the region centroids as constands
         self.c1, self.c2 = self.calcCentroids(img)
-        # shrink the region
-        id_pre_row, id_pre_col = np.where(self.phi_pre > 0)
-        self.phi_margin = [id_pre_row.min(), id_pre_row.max(), 
-                           id_pre_col.min(), id_pre_col.max()]
-        #phi = self.phi[self.phi_margin[0]:self.phi_margin[1]+1,
-        #               self.phi_margin[2]:self.phi_margin[3]+1]
         phi_mask = np.isnan(self.phi)
         # Iterate to optimize phi
         for it in range(niter):
             phidiffnorm = 0.0
-            for j in range(self.phi_margin[0], self.phi_margin[1]+1):
+            for j in range(self.imgshape[0]):
                 # top margin
                 if j == 0:
                     idu = 0
@@ -144,7 +137,7 @@ class CasLevelSet(LevelSet):
                     idd = 0
                 else:
                     idd = 1
-                for i in range(self.phi_margin[2], self.phi_margin[3]+1):
+                for i in range(self.imgshape[1]):
                     # left margin
                     if i == 0:
                         idl = 0
@@ -156,7 +149,9 @@ class CasLevelSet(LevelSet):
                     else:
                         idr = 1
                     # if nan
-                    if phi_mask[j+idu,i] or phi_mask[j+idd,i] or phi_mask[j,i+idl] or phi_mask[j,i+idr]:
+                    mask = np.array([phi_mask[j+idu,i],phi_mask[j+idd,i],phi_mask[j,i+idl],phi_mask[j,i+idr]])
+                    # print(mask)
+                    if len(np.where(mask == True)[0]) >= 1:
                         continue
                     else:
                         # main body
@@ -200,7 +195,9 @@ class CasLevelSet(LevelSet):
             
             if np.mod(it, 5) == 0:
                 t = time.strftime('%Y-%m-%d: %H:%M:%S', time.localtime(time.time())) 
-                imsave("./tmp/phi_%d.png" % it, self.phi)
+                phi = self.phi.copy()
+                phi[np.isnan(phi)] = 0
+                imsave("./tmp/phi2_%d.png" % it, phi)
                 print("[%s] Iter: %d     PhiDiffNorm: %.5f" % (t,it,phidiffnorm))
   
     def drawResult(self,img,normflag=True,logflag=False):
@@ -214,7 +211,7 @@ class CasLevelSet(LevelSet):
         ax0 = plt.subplot(gs[0])
         ax0 = plt.imshow(img)
         ax0 = plt.contour(self.phi,levels=[0.0]);
-        ax1 = plt.contour(self.phi_pre, levels=[0.0])
+        ax1 = plt.contour(self.phi_pre, levels=[self.lev])
         plt.xlabel("horizontal")
         plt.ylabel("vertical")
         
